@@ -1,57 +1,52 @@
+
 import telebot
 import feedparser
+from deep_translator import GoogleTranslator
 import time
-from googletrans import Translator
 from flask import Flask
-from threading import Thread
+import threading
 
-# --- RENDER O'CHIB QOLMASLIGI UCHUN ---
-app = Flask('')
-@app.route('/')
-def home():
-    return "Bot ishlayapti!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# --- SOZLAMALAR ---
-API_TOKEN = '8783318642:AAHe-cHu7C5IRxoKg68wD2ARM91n_Q8rkeo'
-CHANNEL_ID = '@goalzone_live'
-
-SOURCES = [
-    {'url': 'https://www.sports.ru/rss/all_news.xml', 'lang': 'ru'},
-    {'url': 'https://feeds.bbci.co.uk/sport/football/rss.xml', 'lang': 'en'}
+# SOZLAMALAR
+TOKEN = "7913340578:AAH40Kx-K_5Xh-Xf_YvjY-9WvUatY3iR3X0"
+CHANNEL_ID = "@goalzone_uz" # Kanal manzili
+RSS_URLS = [
+    "https://www.skysports.com/rss/12040", # Sky Sports
+    "https://www.goal.com/feeds/en/news"    # Goal.com
 ]
 
-AD_TEXT = "\n\n💰 **DAROMAD:** [Bonusni olish](https://t.me/goalzone_live)"
+bot = telebot.TeleBot(TOKEN)
+app = Flask('')
 
-bot = telebot.TeleBot(API_TOKEN)
-translator = Translator()
-posted_links = []
+@app.route('/')
+def home():
+    return "Bot is running!"
 
-def check_and_post():
-    for source in SOURCES:
-        try:
-            feed = feedparser.parse(source['url'])
-            if feed.entries:
-                latest = feed.entries[0]
-                if latest.link not in posted_links:
-                    translation = translator.translate(latest.title, src=source['lang'], dest='uz')
-                    flag = "🇷🇺" if source['lang'] == 'ru' else "🇬🇧"
-                    msg = f"⚡️ **TEZKOR {flag}**\n\n{translation.text}\n\n👉 [Batafsil]({latest.link}){AD_TEXT}\n\n⚽️ {CHANNEL_ID}"
-                    bot.send_message(CHANNEL_ID, msg, parse_mode="Markdown")
-                    posted_links.append(latest.link)
-                    if len(posted_links) > 50: posted_links.pop(0)
-        except Exception as e:
-            print(f"Xato: {e}")
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+posted_links = set()
+
+def get_news():
+    global posted_links
+    for url in RSS_URLS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:5]:
+            if entry.link not in posted_links:
+                try:
+                    title_uz = GoogleTranslator(source='en', target='uz').translate(entry.title)
+                    text = f"⚡️ **{title_uz}**\n\n🔗 [Batafsil]({entry.link})"
+                    bot.send_message(CHANNEL_ID, text, parse_mode="Markdown")
+                    posted_links.add(entry.link)
+                    time.sleep(2)
+                except Exception as e:
+                    print(f"Xato: {e}")
+
+def main_loop():
+    while True:
+        get_news()
+        time.sleep(300) # 5 daqiqa dam oladi
 
 if __name__ == "__main__":
-    keep_alive() # Web serverni yoqish
-    print("Global Bot Render-da ishga tushdi...")
-    while True:
-        check_and_post()
-        time.sleep(120) # 2 daqiqa kutish
+    threading.Thread(target=run_flask).start()
+    print("Bot ishga tushdi...")
+    main_loop()
