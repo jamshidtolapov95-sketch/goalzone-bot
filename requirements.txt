@@ -2,5 +2,3 @@ pyTelegramBotAPI
 feedparser
 deep-translator
 flask
-
-
